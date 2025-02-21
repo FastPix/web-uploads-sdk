@@ -1,0 +1,42 @@
+{
+  "name": "@fastpix/resumable-uploads",
+  "version": "1.0.0",
+  "description": "FastPix SDK for chunked and resumable file uploads for web.",
+  "main": "./dist/uploads.js",
+  "module": "./dist/uploads.mjs",
+  "browser": "./dist/uploads.mjs",
+  "exports": {
+    "import": "./dist/uploads.mjs",
+    "require": "./dist/uploads.cjs",
+    "default": "./dist/uploads.js"
+  },
+  "scripts": {
+    "format": "prettier --write \"src/**/*.ts\"",
+    "build:esm": "esbuild src/uploads.ts --target=es2019  --bundle --minify --format=esm --outdir=dist --out-extension:.js=.mjs",
+    "build:cjs": "esbuild src/uploads.ts --target=es2019 --bundle --minify --format=cjs --outdir=dist --out-extension:.js=.cjs",
+    "build:iife": "esbuild src/uploads.ts --target=es2019 --bundle --minify  --format=iife --outfile=./dist/uploads.js",
+    "build": "npm run format & npm run build:esm & npm run build:iife & npm run build:cjs"
+  },
+  "files": [
+    "dist/*"
+  ],
+  "keywords": [
+    "file upload",
+    "chunked upload",
+    "uploader",
+    "web uploads",
+    "resumable uploads",
+    "multipart uploads",
+    "uploads SDK",
+    "file chunking",
+    "chunked uploads",
+    "fastpix uploads"
+  ],
+  "author": "FastPix, Inc",
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.20.2",
+    "prettier": "^3.3.3",
+    "typescript": "^5.4.5"
+  }
+}

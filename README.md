@@ -144,3 +144,7 @@ This SDK supports the following parameters:
 - `delayRetry` (optional):
 
   Delay between retry attempts (in milliseconds) after a chunk upload fails. Default is 1000 ms.
+
+# Detailed Usage:
+
+For more detailed steps and advanced usage, please refer to the official [FastPix Documentation](https://docs.fastpix.io/docs/upload-videos-directly#resumable-uploading-of-large-files).

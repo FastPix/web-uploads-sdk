@@ -166,9 +166,9 @@ try {
 
 # References
  
-- [FastPix Homepage](https://www.fastpix.io/)
-- [FastPix Dashboard](https://dashboard.fastpix.io/)
-- [Uploads github](https://github.com/FastPix/web-uploads-sdk)
+- [Homepage](https://www.fastpix.io/)
+- [Dashboard](https://dashboard.fastpix.io/)
+- [GitHub](https://github.com/FastPix/web-uploads-sdk)
 - [API Reference](https://docs.fastpix.io/reference/on-demand-overview)
 
 # Detailed Usage:

@@ -1,6 +1,6 @@
 {
   "name": "@fastpix/resumable-uploads",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "FastPix SDK for chunked and resumable file uploads for web.",
   "main": "./dist/uploads.js",
   "module": "./dist/uploads.mjs",
@@ -35,7 +35,7 @@
   "author": "FastPix, Inc",
   "license": "MIT",
   "devDependencies": {
-    "esbuild": "^0.20.2",
+    "esbuild": "^0.25.5",
     "prettier": "^3.3.3",
     "typescript": "^5.4.5"
   }

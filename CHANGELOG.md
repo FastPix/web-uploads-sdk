@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2]
+- Implemented support for Google Cloud Storage resumable uploads and chunked client uploads.
+- Added retry mechanism with exponential backoff for GCS upload failures based on retryable status codes.
+- Enabled support for user-provided signed URLs, allowing resumable uploads to work with externally generated session URIs.
+- Updated the API endpoint from https://v1.fastpix.io/on-demand/uploads to https://api.fastpix.io/v1/on-demand/upload for obtaining signed URLs.
+
+## [1.0.1]
+- Update readme.md and license
+
 ## [1.0.0]
 
 ### Features:

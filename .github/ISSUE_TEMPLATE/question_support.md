@@ -22,9 +22,9 @@ Thank you for reaching out! We're here to help you with the FastPix Resumable Up
 
 ## Question
 **What would you like to know?**
-
+```
 <!-- Please provide a clear, specific question -->
-
+```
 ## What You've Tried
 **What have you already attempted to solve this?**
 
@@ -68,9 +68,9 @@ fileUploader.on("progress", (event) => {
 
 ## Expected Outcome
 **What are you trying to achieve?**
-
+```
 <!-- Describe your end goal -->
-
+```
 ## Error Messages (if any)
 ```
 <!-- If you're getting errors, paste them here -->

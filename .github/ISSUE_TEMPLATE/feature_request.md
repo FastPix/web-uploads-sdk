@@ -12,24 +12,24 @@ Thank you for suggesting a new feature for the FastPix Resumable Uploads SDK! Pl
 
 ## Feature Description
 **Clear and concise description of the feature you'd like to see:**
-
+```
 <!-- Please provide a detailed description of the feature -->
-
+```
 ## Use Case
 **Describe the specific use case or problem this feature would solve:**
-
+```
 <!-- Explain why this feature would be valuable -->
-
+```
 ## Proposed Solution
 **Describe your proposed solution or feature:**
-
+```
 <!-- How would you like this feature to work? -->
-
+```
 ## Alternative Solutions
 **Describe any alternative solutions you've considered:**
-
+```
 <!-- Are there other ways to solve this problem? -->
-
+```
 ## Implementation Ideas
 **If you have ideas about how this could be implemented:**
 
@@ -76,9 +76,9 @@ fileUploader.yourNewFeature();
 
 ### Examples from Other SDKs
 **If similar features exist in other SDKs, please provide examples:**
-
+```
 <!-- How do other upload SDKs handle this? -->
-
+```
 ## Priority
 Please indicate the priority of this feature:
 

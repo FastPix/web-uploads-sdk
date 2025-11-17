@@ -8,6 +8,7 @@
 - [ ] Documentation errors fixed
 - [ ] Code examples updated
 - [ ] Links and references updated
+- [ ] Other
 
 ### Files Modified
 - [ ] README.md
@@ -18,10 +19,10 @@
 
 ### Summary
 **Brief description of changes:**
-
+```
 <!-- What documentation was added, updated, or fixed? -->
-
-### Code Examples
+```
+### Code Examples (if Applicable)
 ```javascript
 // If you added/updated code examples, include them here
 import { Uploader } from "@fastpix/resumable-uploads";

@@ -20,19 +20,19 @@ Thank you for helping improve the FastPix Node SDK documentation! Please provide
 
 ## Description
 **Clear description of the documentation issue:**
-
+```
 <!-- What's wrong with the documentation? -->
-
+```
 ## Current Documentation
 **What does the current documentation say?**
-
+```
 <!-- Paste the current documentation content -->
-
+```
 ## Expected Documentation
 **What should the documentation say instead?**
-
+```
 <!-- Describe what the correct documentation should be -->
-
+```
 ## Location
 **Where is this documentation issue located?**
 
@@ -45,8 +45,9 @@ Thank you for helping improve the FastPix Node SDK documentation! Please provide
 - [ ] Other: _______________
 
 **Specific file and section:**
+```
 <!-- e.g., README.md line 45, or docs/api-reference.md section "Authentication" -->
-
+```
 ## Impact
 **How does this documentation issue affect users?**
 
@@ -61,6 +62,7 @@ Thank you for helping improve the FastPix Node SDK documentation! Please provide
 
 ```markdown
 <!-- Example of how the documentation should be written -->
+
 # Correct Documentation
 
 Here's how the documentation should be written:
@@ -80,8 +82,9 @@ const fastpix = new Fastpix({
 ## Additional Context
 
 ### Screenshots
+```
 <!-- If applicable, include screenshots of the documentation issue -->
-
+```
 ### Related Issues
 - **GitHub Issues:** [Link to any related issues]
 - **User Feedback:** [Link to user complaints or confusion]

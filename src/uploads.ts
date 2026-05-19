@@ -187,7 +187,18 @@ export class Uploader {
     if (props?.file) {
       this.chunkProcessor = new VideoChunkProcessor(props?.file);
     }
-    this.initiateSession();
+
+    // If the endpoint is already a GCS resumable session URI (FastPix
+    // pre-initiates the session and returns it directly — recognizable
+    // by the `upload_id=` query parameter), skip the POST-init step and
+    // PUT chunks straight to the endpoint. POSTing a session URI yields
+    // 405 Method Not Allowed.
+    if (/[?&]upload_id=/.test(this.uploadEndpoint)) {
+      this.sessionUri = this.uploadEndpoint;
+      this.validateUploadStatus();
+    } else {
+      this.initiateSession();
+    }
 
     if (typeof window !== "undefined") {
       window.addEventListener("online", () => {

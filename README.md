@@ -19,9 +19,9 @@ Please note that this SDK is designed to work only with FastPix and is not a gen
 
 To get started with SDK, you will need a signed URL.
 
-To make API requests, you'll need a valid **Access Token** and **Secret Key**. See the [Basic Authentication Guide](https://docs.fastpix.io/docs/basic-authentication) for details on retrieving these credentials.
+To make API requests, you'll need a valid **Access Token** and **Secret Key**. See the [Basic Authentication Guide](https://fastpix.com/docs/getting-started/activate-your-account#authentication-format) for details on retrieving these credentials.
 
-Once you have your credentials, use the [Upload media from device](https://docs.fastpix.io/reference/direct-upload-video-media) API to generate a signed URL for uploading media.
+Once you have your credentials, use the [Upload media from device](https://fastpix.com/docs/upload-videos/upload-videos-from-device) API to generate a signed URL for uploading media.
 
 ## Installation:
 
@@ -166,11 +166,11 @@ try {
 
 # References
  
-- [Homepage](https://www.fastpix.io/)
-- [Dashboard](https://dashboard.fastpix.io/)
+- [Homepage](https://www.fastpix.com/)
+- [Dashboard](https://dashboard.fastpix.com/)
 - [GitHub](https://github.com/FastPix/web-uploads-sdk)
-- [API Reference](https://docs.fastpix.io/reference/on-demand-overview)
+- [API Reference](https://fastpix.com/docs/video-on-demand-api/upload-and-import-videos/direct-upload-video-media)
 
 # Detailed Usage:
 
-For more detailed steps and advanced usage, please refer to the official [FastPix Documentation](https://docs.fastpix.io/docs/upload-videos-directly#resumable-uploading-of-large-files).
+For more detailed steps and advanced usage, please refer to the official [FastPix Documentation](https://fastpix.com/docs/upload-videos/upload-videos-from-device#uploading-large-media-files).

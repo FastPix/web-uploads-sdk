@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FastPix Resumable Uploads — CDN test</title>
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        color-scheme: light dark;
+      }
+      body {
+        max-width: 720px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.4;
+      }
+      fieldset {
+        border: 1px solid #8884;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        padding: 1rem;
+      }
+      label {
+        display: block;
+        margin: 0.5rem 0 0.25rem;
+        font-size: 0.9rem;
+      }
+      input[type="text"],
+      input[type="number"] {
+        width: 100%;
+        padding: 0.4rem;
+        box-sizing: border-box;
+        font: inherit;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .row > * {
+        flex: 1;
+        min-width: 140px;
+      }
+      button {
+        padding: 0.5rem 1rem;
+        font: inherit;
+        cursor: pointer;
+        border-radius: 6px;
+        border: 1px solid #8884;
+        background: #0001;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      progress {
+        width: 100%;
+        height: 1.25rem;
+      }
+      #log {
+        background: #0001;
+        padding: 0.75rem;
+        height: 220px;
+        overflow: auto;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        white-space: pre-wrap;
+        border-radius: 6px;
+      }
+      .pct {
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FastPix Resumable Uploads — CDN test</h1>
+    <p>
+      Loads <code>@fastpix/resumable-uploads</code> from jsDelivr and exercises
+      every documented option, event, and control method.
+    </p>
+
+    <fieldset style="border-color: #d97706; background: #fef3c7">
+      <legend style="color: #92400e">⚠ Local testing only</legend>
+      <p style="margin: 0; color: #78350f">
+        This page lets you paste your FastPix
+        <strong>Access Token</strong> and <strong>Secret Key</strong> directly
+        to mint a signed URL. Those credentials must <strong>never</strong> ship
+        in production browser code — in real apps, mint the signed URL on your
+        server using <code>@fastpix/fastpix-node</code> and send only the signed
+        URL to the client. Keep this file off any deployed origin.
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>1. Get a signed upload URL</legend>
+      <div class="row">
+        <div>
+          <label for="accessToken">Access Token (Basic auth username)</label>
+          <input
+            id="accessToken"
+            type="text"
+            autocomplete="off"
+            placeholder="from FastPix dashboard"
+          />
+        </div>
+        <div>
+          <label for="secretKey">Secret Key (Basic auth password)</label>
+          <input
+            id="secretKey"
+            type="password"
+            autocomplete="off"
+            placeholder="from FastPix dashboard"
+          />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="apiHost">API host</label>
+          <select id="apiHost">
+            <option value="https://api.fastpix.com">api.fastpix.com</option>
+            <option value="https://api.fastpix.io">
+              api.fastpix.io (legacy)
+            </option>
+          </select>
+        </div>
+        <div>
+          <label for="accessPolicy">accessPolicy</label>
+          <select id="accessPolicy">
+            <option value="public">public</option>
+            <option value="private">private</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="corsOrigin">corsOrigin</label>
+          <input id="corsOrigin" type="text" value="*" />
+        </div>
+        <div>
+          <label for="metadataJson">metadata (optional JSON object)</label>
+          <input
+            id="metadataJson"
+            type="text"
+            placeholder='{"source":"cdn-test"}'
+          />
+        </div>
+      </div>
+      <div class="row" style="margin-top: 0.5rem">
+        <button id="signBtn">Get signed URL</button>
+      </div>
+      <label for="endpoint"
+        >Signed URL (auto-filled, or paste your own):</label
+      >
+      <input
+        id="endpoint"
+        type="text"
+        placeholder="https://storage.fastpix.io/v1/upload/..."
+      />
+      <p
+        id="uploadIdLine"
+        style="font-size: 0.85rem; opacity: 0.75; margin: 0.25rem 0 0"
+      ></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>2. Pick a file</legend>
+      <input id="fileInput" type="file" />
+    </fieldset>
+
+    <fieldset>
+      <legend>3. Optional parameters</legend>
+      <div class="row">
+        <div>
+          <label for="chunkSize">chunkSize (KB, min 5120)</label>
+          <input id="chunkSize" type="number" value="16384" min="5120" />
+        </div>
+        <div>
+          <label for="maxFileSize">maxFileSize (KB)</label>
+          <input id="maxFileSize" type="number" placeholder="(unbounded)" />
+        </div>
+        <div>
+          <label for="retryChunkAttempt">retryChunkAttempt</label>
+          <input id="retryChunkAttempt" type="number" value="5" min="0" />
+        </div>
+        <div>
+          <label for="delayRetry">delayRetry (sec)</label>
+          <input id="delayRetry" type="number" value="1" min="0" />
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>4. Controls</legend>
+      <div class="row">
+        <button id="startBtn">Start upload</button>
+        <button id="pauseBtn" disabled>Pause</button>
+        <button id="resumeBtn" disabled>Resume</button>
+        <button id="abortBtn" disabled>Abort</button>
+      </div>
+      <p>
+        Progress: <span id="progressPct" class="pct">0%</span>
+        <progress id="progress" value="0" max="100"></progress>
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>5. Event log</legend>
+      <div id="log"></div>
+    </fieldset>
+
+    <!--
+      Loads the locally-built SDK (../dist/uploads.js) so the pause() fix
+      is exercised. Swap back to the jsDelivr CDN URL to test the published
+      version:
+        <script src="https://cdn.jsdelivr.net/npm/@fastpix/resumable-uploads@latest/dist/uploads.js"></script>
+    -->
+    <script src="../dist/uploads.js"></script>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const logEl = $("log");
+
+      function log(label, payload) {
+        const ts = new Date().toISOString().split("T")[1].replace("Z", "");
+        const body = payload === undefined ? "" : " " + JSON.stringify(payload);
+        logEl.textContent += `[${ts}] ${label}${body}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      let uploader = null;
+
+      $("signBtn").addEventListener("click", async () => {
+        const token = $("accessToken").value.trim();
+        const secret = $("secretKey").value;
+        const host = $("apiHost").value;
+        const accessPolicy = $("accessPolicy").value;
+        const corsOrigin = $("corsOrigin").value.trim();
+        const metaRaw = $("metadataJson").value.trim();
+
+        if (!token || !secret)
+          return alert("Access Token and Secret Key required.");
+
+        let metadata;
+        if (metaRaw) {
+          try {
+            metadata = JSON.parse(metaRaw);
+          } catch (e) {
+            return alert("metadata must be valid JSON (or leave it blank).");
+          }
+        }
+
+        const pushMediaSettings = { accessPolicy };
+        if (metadata) pushMediaSettings.metadata = metadata;
+
+        const requestBody = { pushMediaSettings };
+        if (corsOrigin) requestBody.corsOrigin = corsOrigin;
+        const proxyUrl = "http://localhost:3000/sign";
+        log("POST " + proxyUrl + " (proxies to " + host + ")", requestBody);
+
+        $("signBtn").disabled = true;
+        try {
+          const res = await fetch(proxyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token, secret, host, requestBody }),
+          });
+          const text = await res.text();
+          let json;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            json = text;
+          }
+          if (!res.ok) {
+            log("sign failed " + res.status, json);
+            alert("Sign request failed (" + res.status + "). See log.");
+            return;
+          }
+          log("sign response", json);
+          const data = json?.data ?? json;
+          const signedUrl = data?.url ?? data?.uploadUrl;
+          const uploadId = data?.uploadId ?? data?.id;
+          if (!signedUrl) {
+            alert("Response did not include a signed URL. See log.");
+            return;
+          }
+          $("endpoint").value = signedUrl;
+          $("uploadIdLine").textContent = uploadId
+            ? "uploadId: " + uploadId
+            : "";
+        } catch (err) {
+          log("sign network error", err?.message ?? String(err));
+          alert(
+            "Network/CORS error — see the log. If this is a CORS block, mint the URL on a server instead.",
+          );
+        } finally {
+          $("signBtn").disabled = false;
+        }
+      });
+
+      function setRunning(running) {
+        $("startBtn").disabled = running;
+        $("pauseBtn").disabled = !running;
+        $("resumeBtn").disabled = !running;
+        $("abortBtn").disabled = !running;
+      }
+
+      $("startBtn").addEventListener("click", () => {
+        const endpoint = $("endpoint").value.trim();
+        const file = $("fileInput").files[0];
+        if (!endpoint) return alert("Paste a signed URL first.");
+        if (!file) return alert("Pick a file first.");
+
+        const cfg = {
+          endpoint,
+          file,
+          chunkSize: Number($("chunkSize").value) || undefined,
+          retryChunkAttempt: Number($("retryChunkAttempt").value) || undefined,
+          delayRetry: Number($("delayRetry").value) || undefined,
+        };
+        const maxRaw = $("maxFileSize").value;
+        if (maxRaw) cfg.maxFileSize = Number(maxRaw);
+
+        log("init", { ...cfg, file: { name: file.name, size: file.size } });
+
+        try {
+          uploader = Uploader.init(cfg);
+        } catch (err) {
+          log("init error", err?.message ?? String(err));
+          return;
+        }
+
+        uploader.on("progress", (e) => {
+          const pct = e.detail.progress;
+          $("progress").value = pct;
+          $("progressPct").textContent = pct.toFixed(2) + "%";
+        });
+        uploader.on("chunkAttempt", (e) => log("chunkAttempt", e.detail));
+        uploader.on("chunkAttemptFailure", (e) =>
+          log("chunkAttemptFailure", e.detail),
+        );
+        uploader.on("chunkSuccess", (e) => log("chunkSuccess", e.detail));
+        uploader.on("online", () => log("online"));
+        uploader.on("offline", () => log("offline"));
+        uploader.on("error", (e) => {
+          log("error", e.detail?.message ?? e.detail);
+          setRunning(false);
+        });
+        uploader.on("success", () => {
+          log("success");
+          setRunning(false);
+        });
+
+        setRunning(true);
+      });
+
+      $("pauseBtn").addEventListener("click", () => {
+        uploader?.pause();
+        log("pause()");
+      });
+      $("resumeBtn").addEventListener("click", () => {
+        uploader?.resume();
+        log("resume()");
+      });
+      $("abortBtn").addEventListener("click", () => {
+        uploader?.abort();
+        log("abort()");
+        // Reset upload-specific state. Preserve credentials and config
+        // (accessToken, secretKey, apiHost, accessPolicy, corsOrigin,
+        // metadata, chunk params) so the user can immediately try again.
+        uploader = null;
+        $("endpoint").value = "";
+        $("uploadIdLine").textContent = "";
+        $("fileInput").value = "";
+        $("progress").value = 0;
+        $("progressPct").textContent = "0%";
+        setRunning(false);
+      });
+
+      log(
+        "ready",
+        typeof Uploader === "function"
+          ? "Uploader global available"
+          : "Uploader NOT loaded",
+      );
+    </script>
+  </body>
+</html>

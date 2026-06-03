@@ -1,6 +1,6 @@
 {
   "name": "@fastpix/resumable-uploads",
-  "version": "1.0.4",
+  "version": "1.0.3",
   "description": "FastPix SDK for chunked and resumable file uploads for web.",
   "main": "./dist/uploads.js",
   "module": "./dist/uploads.mjs",
@@ -23,11 +23,13 @@
   "keywords": [
     "file upload",
     "chunked upload",
-    "uploader",
+    "uploads",
     "web uploads",
     "resumable uploads",
     "multipart uploads",
     "uploads SDK",
+    "gcs upload",
+    "google cloud storage upload",
     "file chunking",
     "chunked uploads",
     "fastpix uploads"

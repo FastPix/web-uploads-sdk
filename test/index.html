@@ -209,13 +209,12 @@
       <div id="log"></div>
     </fieldset>
 
-    <!--
+    
       Loads the locally-built SDK (../dist/uploads.js) so the pause() fix
       is exercised. Swap back to the jsDelivr CDN URL to test the published
       version:
-        <script src="https://cdn.jsdelivr.net/npm/@fastpix/resumable-uploads@latest/dist/uploads.js"></script>
-    -->
-    <script src="../dist/uploads.js"></script>
+        <script src="../dist/uploads.js"></script>
+   
     <script>
       const $ = (id) => document.getElementById(id);
       const logEl = $("log");
@@ -245,7 +244,7 @@
           try {
             metadata = JSON.parse(metaRaw);
           } catch (e) {
-            return alert("metadata must be valid JSON (or leave it blank).");
+            console.log("Error", e)
           }
         }
 

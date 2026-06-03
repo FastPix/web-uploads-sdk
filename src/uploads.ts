@@ -86,6 +86,12 @@ function calculateChunkSize(options: UserProps): number {
   return chunkSize * 1024;
 }
 
+function getRetryJitterMs(): number {
+  const randomValues = new Uint32Array(1);
+  crypto.getRandomValues(randomValues);
+  return (randomValues[0] / (0xffffffff + 1)) * 1000;
+}
+
 // Handles the processing of video files in chunks
 class VideoChunkProcessor {
   private readonly file: File;
@@ -187,18 +193,7 @@ export class Uploader {
     if (props?.file) {
       this.chunkProcessor = new VideoChunkProcessor(props?.file);
     }
-
-    // If the endpoint is already a GCS resumable session URI (FastPix
-    // pre-initiates the session and returns it directly — recognizable
-    // by the `upload_id=` query parameter), skip the POST-init step and
-    // PUT chunks straight to the endpoint. POSTing a session URI yields
-    // 405 Method Not Allowed.
-    if (/[?&]upload_id=/.test(this.uploadEndpoint)) {
-      this.sessionUri = this.uploadEndpoint;
-      this.validateUploadStatus();
-    } else {
-      this.initiateSession();
-    }
+    this.scheduleUploadStart();
 
     if (typeof window !== "undefined") {
       window.addEventListener("online", () => {
@@ -242,6 +237,25 @@ export class Uploader {
         }
       });
     }
+  }
+
+  private scheduleUploadStart(): void {
+    const startUpload = () => {
+      if (/[?&]upload_id=/.test(this.uploadEndpoint)) {
+        this.sessionUri = this.uploadEndpoint;
+        void this.validateUploadStatus();
+        return;
+      }
+
+      void this.initiateSession();
+    };
+
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(startUpload);
+      return;
+    }
+
+    setTimeout(startUpload, 0);
   }
 
   async initiateSession(): Promise<void> {
@@ -311,16 +325,19 @@ export class Uploader {
       this.retryCount < this.maxRetryAttempts
     ) {
       this.isUploadPaused = true;
+      this.abortActiveXhr();
     }
   }
 
   // Method to resume the upload process
-  resume() {
+  async resume() {
     if (this.canResumeUpload()) {
       this.isUploadPaused = false;
+      await this.synchronizeUploadPosition();
       if (
         this.totalChunksCount !== this.successfulChunksCount &&
-        !this.isUploadProgress
+        !this.isUploadProgress &&
+        this.canProceedWithUpload()
       ) {
         this.requestChunk();
       }
@@ -364,13 +381,13 @@ export class Uploader {
   }
 
   private validateRetrySettings() {
-    if (isNaN(this.maxRetryAttempts) || this.maxRetryAttempts < 0) {
+    if (Number.isNaN(this.maxRetryAttempts) || this.maxRetryAttempts < 0) {
       throw new TypeError(
         `Invalid retryChunkAttempt: ${this.maxRetryAttempts}. It must be a non-negative number.`
       );
     }
 
-    if (isNaN(this.retryDelaySeconds) || this.retryDelaySeconds < 0) {
+    if (Number.isNaN(this.retryDelaySeconds) || this.retryDelaySeconds < 0) {
       throw new TypeError(
         `Invalid delayRetry: ${this.retryDelaySeconds}. It must be a non-negative number of seconds.`
       );
@@ -381,7 +398,7 @@ export class Uploader {
     const size = this.configuredChunkSize;
 
     if (!size) return;
-    if (isNaN(size)) {
+    if (Number.isNaN(size)) {
       throw new TypeError("Chunk size must be a valid number.");
     }
 
@@ -408,7 +425,7 @@ export class Uploader {
     const max = this.maxFileSizeBytes;
     const actual = this.sourceFile.size;
 
-    if (isNaN(max)) {
+    if (Number.isNaN(max)) {
       throw new TypeError("Max file size must be a valid number.");
     }
 
@@ -578,7 +595,7 @@ export class Uploader {
       chunkNumber: this.currentChunkIndex,
       timeInterval: prevChunkUploadedInterval,
       response: uploadResponse,
-    } as ChunkSuccessEventData);
+    });
 
     this.currentChunkStartPosition =
       this.currentChunkStartPosition + this.currentChunkBytes;
@@ -591,9 +608,82 @@ export class Uploader {
     uploadResponse: UploadResponse
   ): void {
     if (uploadedBytes < prevChunkRangeEnd) {
+      this.updateUploadPosition(uploadedBytes + 1);
       this.handleRetryChunkUploading(uploadResponse);
     } else {
       this.handleChunkSuccess(uploadResponse);
+    }
+  }
+
+  private updateUploadPosition(nextBytePosition: number): void {
+    const boundedPosition = Math.min(nextBytePosition, this.sourceFile.size);
+    this.currentChunkStartPosition = boundedPosition;
+    this.currentChunkIndex = Math.floor(
+      boundedPosition / this.configuredChunkBytes
+    );
+    this.successfulChunksCount = Math.min(
+      this.currentChunkIndex,
+      this.totalChunksCount
+    );
+    this.currentChunkBytes = 0;
+  }
+
+  private queryCommittedByteCount(): Promise<number | undefined> {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      this.activeRequest = xhr;
+      const uploadUrl = this.sessionUri ?? this.uploadEndpoint;
+
+      xhr.open("PUT", uploadUrl, true);
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+          this.activeRequest = undefined;
+          const headerMap = this.parseResponseHeaders(
+            xhr.getAllResponseHeaders()
+          );
+
+          if ([200, 201, 204].includes(xhr.status)) {
+            resolve(this.sourceFile.size);
+            return;
+          }
+
+          if (xhr.status === 308) {
+            const rangeHeader = headerMap["range"];
+            if (rangeHeader) {
+              const rangeMatch = /bytes=0-(\d+)/.exec(rangeHeader);
+              if (rangeMatch) {
+                resolve(Number.parseInt(rangeMatch[1], 10) + 1);
+                return;
+              }
+            }
+
+            resolve(0);
+            return;
+          }
+
+          resolve(undefined);
+        }
+      };
+
+      xhr.setRequestHeader("x-goog-resumable", "start");
+      xhr.setRequestHeader("Content-Range", `bytes */${this.sourceFile.size}`);
+      xhr.send();
+    });
+  }
+
+  private async synchronizeUploadPosition(): Promise<void> {
+    if (!this.sessionUri && !this.uploadEndpoint) {
+      return;
+    }
+
+    const committedByteCount = await this.queryCommittedByteCount();
+    if (committedByteCount === undefined) {
+      return;
+    }
+
+    this.updateUploadPosition(committedByteCount);
+    if (committedByteCount >= this.sourceFile.size) {
+      this.validateUploadStatus();
     }
   }
 
@@ -646,7 +736,7 @@ export class Uploader {
             if (rangeHeader) {
               const rangeMatch = /bytes=0-(\d+)/.exec(rangeHeader);
               if (rangeMatch) {
-                const uploadedBytes = parseInt(rangeMatch[1], 10);
+                const uploadedBytes = Number.parseInt(rangeMatch[1], 10);
                 this.handleResumeUpload(
                   uploadedBytes,
                   chunkRangeEnd,
@@ -705,7 +795,7 @@ export class Uploader {
       if (requiresBackoff) {
         const baseDelay = 2000;
         delay = Math.min(
-          baseDelay * Math.pow(2, this.retryCount) + Math.random() * 1000,
+          baseDelay * Math.pow(2, this.retryCount) + getRetryJitterMs(),
           5000
         );
       } else {
@@ -758,6 +848,10 @@ export class Uploader {
             this.currentChunkStartPosition,
             chunkEnd
           );
+        }
+
+        if (!this.canProceedWithUpload()) {
+          return;
         }
 
         if (currentChunk) {

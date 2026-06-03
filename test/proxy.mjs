@@ -16,6 +16,14 @@ import http from "node:http";
 
 const PORT = Number(process.env.PORT) || 3000;
 
+function trimTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end--;
+  }
+  return value.slice(0, end);
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -59,7 +67,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   const auth = Buffer.from(`${token}:${secret}`).toString("base64");
-  const upstreamUrl = `${host.replace(/\/+$/, "")}/v1/on-demand/upload`;
+  const upstreamUrl = `${trimTrailingSlashes(host)}/v1/on-demand/upload`;
 
   console.log(`POST ${upstreamUrl}`);
   try {

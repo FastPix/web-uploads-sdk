@@ -28,17 +28,10 @@ This SDK itself does not hard-code any FastPix host (the upload `endpoint` is al
 - **Pause is now immediate.** `pause()` previously only flipped an internal flag and left the in-flight chunk PUT running to completion, so on large default 16 MB chunks the upload appeared to ignore the first click for many seconds. It now also aborts the active XHR and clears any pending retry timer, so a single click stops uploading right away. `resume()` re-PUTs the same `Content-Range`; GCS resumable semantics make this idempotent and the existing 308 handler reconciles the offset reported by the server.
 - **Skip redundant session init for pre-initiated GCS URIs.** When the upload `endpoint` is already a Google Cloud Storage resumable session URI (recognizable by the `upload_id=` query parameter — the shape FastPix's `direct-upload` API now returns), the SDK previously POSTed `x-goog-resumable: start` to it and got back `405 Method Not Allowed`, because session URIs only accept `PUT`. The constructor now detects this case and uses the supplied URL directly as the session URI, going straight to chunk PUTs. Endpoints without `upload_id=` still go through the original POST-to-init flow.
 
-
-
-
 ## [1.0.3]
 
-### Security
-- Replaced `Math.random()` with `crypto.getRandomValues()` for retry jitter, eliminating predictable timing that could be exploited in timing-based attacks.
-- Replaced `isNaN()` with `Number.isNaN()` throughout input validation to prevent silent type-coercion vulnerabilities (e.g., `isNaN("string")` returns `true`, allowing unexpected values through).
-- Replaced `parseInt()` with `Number.parseInt()` and an explicit radix to guard against unexpected base-inference behavior during header parsing.
-- Tightened chunk-offset and byte-count bounds checks to prevent out-of-range writes when server-reported ranges fall outside the file size.
-
+### Changed
+- Updated npm authentication from Classic token to Granular token for improved security and fine-grained permissions.
 ## [1.0.2]
 - Implemented support for Google Cloud Storage resumable uploads and chunked client uploads.
 - Added retry mechanism with exponential backoff for GCS upload failures based on retryable status codes.

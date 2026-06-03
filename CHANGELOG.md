@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5]
+
+### Security
+- Replaced `Math.random()` with `crypto.getRandomValues()` for retry jitter, eliminating predictable timing that could be exploited in timing-based attacks.
+- Replaced `isNaN()` with `Number.isNaN()` throughout input validation to prevent silent type-coercion vulnerabilities (e.g., `isNaN("string")` returns `true`, allowing unexpected values through).
+- Replaced `parseInt()` with `Number.parseInt()` and an explicit radix to guard against unexpected base-inference behavior during header parsing.
+- Tightened chunk-offset and byte-count bounds checks to prevent out-of-range writes when server-reported ranges fall outside the file size.
+
+
+## [1.0.4]
+
+
+
 ## [1.0.3]
 
 ### Security

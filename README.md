@@ -142,6 +142,8 @@ The upload function accepts the following parameters:
 | `maxFileSize`       | `number` (in KB)                    | Optional | Maximum allowed file size for upload, specified in kilobytes. Files exceeding this limit will be rejected.                                                    |
 | `retryChunkAttempt` | `number`                            | Optional | Number of retry attempts per chunk in case of failure. Default is `5`.                                                                                        |
 | `delayRetry`        | `number` (in seconds)               | Optional | Delay between retry attempts after a failed chunk upload. Default is `1` second.                                                                              |
+| `stallTimeout`      | `number` (in seconds)               | Optional | Time without any upload progress before the in-flight chunk request is treated as stalled, aborted and retried on a fresh connection. Default is `30` seconds, minimum `1`. |
+| `connectionRefreshInterval` | `number` (in seconds)       | Optional | Time a chunk request may keep running before the connection is re-established, continuing from the last byte the server committed. This recovers connections stuck at a stale speed (e.g. a transfer that started on a slow network staying slow after conditions improve). Backs off automatically on genuinely slow networks. Default is `45` seconds, minimum `5`. |
 
 ### Example usage of integrating all parameters with `Uploader.init`
 

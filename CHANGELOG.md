@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.6]
+
+### Types
+- Exported all public type definitions (`UserProps`, `UploadResponse`, `CommonEventData`, and all event-payload interfaces), so consumers can import them directly instead of redeclaring.
+- Introduced a strongly-typed `UploaderEventMap` and made `on()` generic, so each event listener now receives a correctly-typed `event.detail` (e.g. a `progress` listener gets `ProgressEventData`) instead of an untyped `CustomEvent`.
+- Made the internal `emitEvent()` generic and type-checked against `UploaderEventMap`, removing the previous `Record<string, any>` payload and the `as ...EventData` assertions it required.
+- Added explicit return-type annotations across public and internal methods (`abort`, `pause`, `resume`, `requestChunk`, and others).
+- Generated and shipped `.d.ts` type declarations: added a `build:types` step and wired the `types`/`exports` fields so TypeScript consumers resolve typings under both ESM and CJS.
+
+### Fixed
+- `ErrorEventData` now extends `Partial<CommonEventData>` and carries an optional `detail`, correctly reflecting that some error events — such as session-init failures — are emitted before chunk/common data is available.
+- `getCommonEventData()` now falls back `fileSize` to `0` instead of an empty string, keeping the field a `number` as typed.
+- Typed streamed chunk parts as `BlobPart[]` to match the `Blob` constructor input.
+- **Uploads no longer stay stuck at a stale connection speed.** Browsers can pin a request to the network conditions it was opened under — Firefox in particular applies its throttling per request, so an upload started on a slow network stayed slow even after conditions improved, until the user manually paused and resumed. The SDK now recycles the connection automatically: a chunk request that keeps running past `connectionRefreshInterval` (default 45s) is aborted and re-established on a fresh connection, continuing from the last byte the server committed. The interval backs off up to 8× when a refresh yields no committed progress, so genuinely slow networks are not thrashed. Recycling consumes no retry budget and emits no failure events.
+- **Stalled (zero-progress) chunk requests now recover automatically.** Previously a wedged socket that never reached `readyState 4` hung the upload forever with no timeout, error handler, or stall detection — only a manual pause/resume could un-stick it. A stall watchdog now aborts any chunk request with no upload progress for `stallTimeout` (default 30s), routing it into the existing retry/backoff path on a fresh connection.
+- **Connection-level retries resume from the server's committed offset.** A retried chunk previously re-sent the entire chunk from its start byte, discarding partial progress. Retries triggered by aborts, stalls, or network failures now query the resumable session (`308` Range check) first and continue from the last committed byte, losing at most the final uncommitted 256 KB block.
+- **Retry budget is now per chunk.** `retryChunkAttempt` was counted cumulatively across the whole upload and never reset, so transient retries spread over many chunks could terminally kill a long transfer even though every chunk recovered. The counter now resets on each successful chunk.
+- **Resume no longer hangs on a dead status probe.** The `308` byte-offset query used by `resume()` had no timeout; a dead socket there froze resume forever. It is now capped at `stallTimeout`.
+- **Fixed an empty-range request when the offset probe reported the upload complete.** When all bytes were already committed, the chunk-index math undercounted a final partial chunk and could issue a PUT for an empty byte range instead of finishing.
+- **Resuming while offline no longer dead-locks the upload.** `resume()` was a silent no-op while the network was down (`canResumeUpload()` required connectivity), so the internal pause flag stayed set; on reconnect the `online` handler skips continuation for paused uploads — leaving a user who paused, went offline, pressed resume, and came back online stuck forever. `resume()` now always records the intent (clears the pause flag) and defers the network work to the `online` handler when offline.
+- **Pausing while offline is honoured on reconnect.** The mirror case: `pause()` was also dropped while offline (`canProceedWithUpload()` requires connectivity), so on reconnect the engine silently self-resumed an upload the user had paused. `pause()` now records the pause intent regardless of connectivity; the `online` handler already respects it.
+
+### Added
+- New optional `stallTimeout` (seconds, default `30`) and `connectionRefreshInterval` (seconds, default `45`) props on `Uploader.init`.
+
 ## [1.0.5]
 
 ### Security

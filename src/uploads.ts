@@ -1,5 +1,5 @@
 // Supported event types
-type EventNameType =
+export type EventNameType =
   | "chunkAttempt"
   | "chunkSuccess"
   | "error"
@@ -9,16 +9,38 @@ type EventNameType =
   | "offline"
   | "chunkAttemptFailure";
 
-interface UserProps {
+export interface UserProps {
   endpoint: string;
   file: File;
   retryChunkAttempt?: string | number;
   delayRetry?: string | number;
   chunkSize?: string | number;
   maxFileSize?: string | number;
+  stallTimeout?: string | number;
+  connectionRefreshInterval?: string | number;
 }
 
-interface UploadResponse {
+export interface UploaderEventMap {
+  chunkAttempt: CustomEvent<ChunkAttemptEventData>;
+  chunkSuccess: CustomEvent<ChunkSuccessEventData>;
+  progress: CustomEvent<ProgressEventData>;
+  success: CustomEvent<SuccessEventData>;
+  error: CustomEvent<ErrorEventData>;
+  chunkAttemptFailure: CustomEvent<ChunkAttemptFailureEventData>;
+  online: CustomEvent<OnlineEventData>;
+  offline: CustomEvent<OfflineEventData>;
+}
+
+export interface ChunkAttemptEventData extends CommonEventData {
+  chunkNumber: number;
+  chunkSize: number | undefined;
+}
+
+export interface ProgressEventData extends CommonEventData {
+  progress: number;
+}
+
+export interface UploadResponse {
   statusCode: number;
   responseBody: any;
   url: string;
@@ -26,7 +48,7 @@ interface UploadResponse {
   headers: Record<string, string>;
 }
 
-interface CommonEventData {
+export interface CommonEventData {
   totalChunks: number;
   uploadedChunks: number;
   remainingChunks: number;
@@ -35,31 +57,32 @@ interface CommonEventData {
   fileSize: number;
 }
 
-interface ChunkSuccessEventData extends CommonEventData {
+export interface ChunkSuccessEventData extends CommonEventData {
   chunkNumber: number;
   timeInterval: number;
   response: UploadResponse;
 }
 
-interface ErrorEventData extends CommonEventData {
+export interface ErrorEventData extends Partial<CommonEventData> {
   message: string;
   chunkNumber?: number;
   response?: UploadResponse;
+  detail?: string;
   statusCode?: number;
   failedAttempts?: number;
   maxAttempts?: number;
 }
 
-interface OnlineEventData extends CommonEventData {
+export interface OnlineEventData extends CommonEventData {
   message: string;
 }
 
-interface OfflineEventData extends CommonEventData {
+export interface OfflineEventData extends CommonEventData {
   message: string;
   uploadOffset: number;
 }
 
-interface ChunkAttemptFailureEventData extends CommonEventData {
+export interface ChunkAttemptFailureEventData extends CommonEventData {
   chunkAttempt: number;
   totalChunkFailureAttempts: number;
   chunkNumber: number;
@@ -68,7 +91,7 @@ interface ChunkAttemptFailureEventData extends CommonEventData {
   consecutiveBackoffFailures: number;
 }
 
-interface SuccessEventData extends CommonEventData {
+export interface SuccessEventData extends CommonEventData {
   uploadDuration: number;
   totalDuration: number;
   averageChunkSize: number;
@@ -111,7 +134,7 @@ class VideoChunkProcessor {
     try {
       const blob = this.file.slice(chunkStart, chunkEnd);
       const stream = blob.stream();
-      const chunks: Uint8Array[] = [];
+      const chunks: BlobPart[] = [];
       const reader = stream.getReader();
 
       while (true) {
@@ -156,6 +179,16 @@ export class Uploader {
   private uploadStartTimestamp: number;
   private consecutiveBackoffFailures: number = 0;
   private isUploadProgress: boolean;
+  private isDestroyed: boolean = false;
+  private isSessionInitiating: boolean = false;
+  private readonly handleWindowOnline: (() => void) | undefined;
+  private readonly handleWindowOffline: (() => void) | undefined;
+  private readonly stallTimeoutMs: number;
+  private readonly connectionRefreshBaseMs: number;
+  private connectionRefreshMs: number;
+  private lastUploadProgressAt: number = 0;
+  private chunkRequestStartedAt: number = 0;
+  private stallWatchdogId: ReturnType<typeof setInterval> | undefined;
 
   static init(uploadProps: UserProps): Uploader {
     return new Uploader(uploadProps);
@@ -168,11 +201,16 @@ export class Uploader {
     this.retryDelaySeconds = Number(props.delayRetry) || 1;
     this.configuredChunkSize = Number(props.chunkSize);
     this.maxFileSizeBytes = (Number(props.maxFileSize) || 0) * 1024;
+    this.stallTimeoutMs = (Number(props.stallTimeout) || 30) * 1000;
+    this.connectionRefreshBaseMs =
+      (Number(props.connectionRefreshInterval) || 45) * 1000;
+    this.connectionRefreshMs = this.connectionRefreshBaseMs;
     this.validateUserInput();
 
     this.currentChunkIndex = 0;
     this.retryCount = 0;
-    this.isNetworkOffline = false;
+    this.isNetworkOffline =
+      typeof navigator === "undefined" ? false : !navigator.onLine;
     this.isUploadPaused = false;
     this.isUploadAborted = false;
     this.isUploadProgress = false;
@@ -196,13 +234,25 @@ export class Uploader {
     this.scheduleUploadStart();
 
     if (typeof window !== "undefined") {
-      window.addEventListener("online", () => {
-        if (!this.sessionUri && this.uploadEndpoint && this.isNetworkOffline) {
-          this.initiateSession();
-          this.isNetworkOffline = false;
-        } else if (
+      this.handleWindowOnline = () => {
+        if (this.isDestroyed || this.isUploadAborted) {
+          return;
+        }
+
+        if (
+          !this.sessionUri &&
+          this.uploadEndpoint &&
           this.isNetworkOffline &&
-          !this.isUploadAborted &&
+          this.isSessionInitiating
+        ) {
+          // The initial session request is still pending/interrupted for this instance. Do NOT start a new session here.
+          this.isNetworkOffline = false;
+          return;
+        }
+
+        if (
+          this.sessionUri &&
+          this.isNetworkOffline &&
           this.retryCount < this.maxRetryAttempts &&
           this.totalChunksCount > 0
         ) {
@@ -219,9 +269,13 @@ export class Uploader {
             }
           }
         }
-      });
+      };
 
-      window.addEventListener("offline", () => {
+      this.handleWindowOffline = () => {
+        if (this.isDestroyed || this.isUploadAborted) {
+          return;
+        }
+
         this.isNetworkOffline = true;
 
         if (
@@ -235,8 +289,39 @@ export class Uploader {
               "Connection lost. Your upload has been paused. It will automatically resume when the connection is restored.",
           } as OfflineEventData);
         }
-      });
+      };
+
+      window.addEventListener("online", this.handleWindowOnline);
+      window.addEventListener("offline", this.handleWindowOffline);
     }
+  }
+
+  destroy(): void {
+    if (this.isDestroyed) {
+      return;
+    }
+    this.isDestroyed = true;
+    this.isUploadAborted = true;
+
+    if (this.retryTimeoutId) {
+      clearTimeout(this.retryTimeoutId);
+      this.retryTimeoutId = undefined;
+    }
+    this.abortActiveXhr();
+
+    if (typeof window !== "undefined") {
+      if (this.handleWindowOnline) {
+        window.removeEventListener("online", this.handleWindowOnline);
+      }
+      if (this.handleWindowOffline) {
+        window.removeEventListener("offline", this.handleWindowOffline);
+      }
+    }
+  }
+
+  private emitTerminalError(detail: ErrorEventData): void {
+    this.emitEvent("error", detail);
+    this.destroy();
   }
 
   private scheduleUploadStart(): void {
@@ -259,6 +344,16 @@ export class Uploader {
   }
 
   async initiateSession(): Promise<void> {
+    if (
+      this.isDestroyed ||
+      this.isUploadAborted ||
+      this.sessionUri ||
+      this.isSessionInitiating
+    ) {
+      return;
+    }
+    this.isSessionInitiating = true;
+
     try {
       const response = await fetch(this.uploadEndpoint, {
         method: "POST",
@@ -268,9 +363,13 @@ export class Uploader {
         },
       });
 
+      if (this.isDestroyed || this.isUploadAborted) {
+        return;
+      }
+
       if (!response.ok) {
         const errorText = await response.text();
-        this.emitEvent("error", {
+        this.emitTerminalError({
           message: `Failed to initiate resumable upload session: ${response.status} ${response.statusText || errorText}`,
         });
         return;
@@ -279,7 +378,7 @@ export class Uploader {
       // Get the session URI from the Location header
       const locationHeader = response.headers.get("Location");
       if (!locationHeader) {
-        this.emitEvent("error", {
+        this.emitTerminalError({
           message: "No session URI returned. Please retry upload.",
         });
         return;
@@ -289,39 +388,132 @@ export class Uploader {
       this.validateUploadStatus();
     } catch (err) {
       const error = err as Error;
-      this.emitEvent("error", {
+      this.emitTerminalError({
         message: "Error while initiating upload session",
         detail: error.message ?? "",
       });
+    } finally {
+      this.isSessionInitiating = false;
     }
   }
 
   private abortActiveXhr(): void {
+    this.stopStallWatchdog();
     if (this.activeRequest) {
       this.activeRequest.abort();
       this.activeRequest = undefined;
     }
   }
 
-  // Method to abort the current chunk being uploaded
-  abort() {
-    if (this.totalChunksCount > 0 && this.activeRequest) {
-      this.abortActiveXhr();
-      this.isUploadAborted = true;
-      this.retryUpload();
-      this.emitEvent("error", {
-        ...this.getCommonEventData(),
-        message: "Upload aborted. Please try again!",
-      } as ErrorEventData);
-    } else {
-      this.retryUpload();
+  private startStallWatchdog(xhr: XMLHttpRequest): void {
+    this.stopStallWatchdog();
+    const now = Date.now();
+    this.lastUploadProgressAt = now;
+    this.chunkRequestStartedAt = now;
+    const tickMs = Math.max(
+      250,
+      Math.min(
+        5000,
+        Math.min(this.stallTimeoutMs, this.connectionRefreshMs) / 4
+      )
+    );
+
+    this.stallWatchdogId = setInterval(() => {
+      if (this.activeRequest !== xhr || this.isDestroyed) {
+        this.stopStallWatchdog();
+        return;
+      }
+
+      // Offline and paused states abort the request through their own paths.
+      if (this.isUploadPaused || this.isNetworkOffline) {
+        return;
+      }
+
+      if (Date.now() - this.lastUploadProgressAt >= this.stallTimeoutMs) {
+        this.stopStallWatchdog();
+        xhr.abort();
+        return;
+      }
+
+      if (Date.now() - this.chunkRequestStartedAt >= this.connectionRefreshMs) {
+        this.stopStallWatchdog();
+        void this.recycleConnection(xhr);
+      }
+    }, tickMs);
+  }
+
+  private stopStallWatchdog(): void {
+    if (this.stallWatchdogId) {
+      clearInterval(this.stallWatchdogId);
+      this.stallWatchdogId = undefined;
     }
   }
 
-  // Method to pause the upload process
-  pause() {
+  private async recycleConnection(xhr: XMLHttpRequest): Promise<void> {
+    if (this.activeRequest !== xhr || !this.canProceedWithUpload()) {
+      return;
+    }
+
+    // Detach handlers first so the abort is not mistaken for a failed chunk.
+    xhr.onreadystatechange = null;
+    xhr.upload.onprogress = null;
+    this.activeRequest = undefined;
+    xhr.abort();
+    this.isUploadProgress = false;
+
+    const previousPosition = this.currentChunkStartPosition;
+    await this.synchronizeUploadPosition();
+
+    if (this.currentChunkStartPosition > previousPosition) {
+      this.connectionRefreshMs = Math.max(
+        this.connectionRefreshBaseMs,
+        this.connectionRefreshMs / 2
+      );
+    } else {
+      this.connectionRefreshMs = Math.min(
+        this.connectionRefreshMs * 2,
+        this.connectionRefreshBaseMs * 8
+      );
+    }
+
     if (
-      this.canProceedWithUpload() &&
+      this.totalChunksCount !== this.successfulChunksCount &&
+      !this.isUploadProgress &&
+      this.canProceedWithUpload()
+    ) {
+      this.requestChunk();
+    }
+  }
+
+  // Method to abort the current chunk being uploaded.
+  abort(): void {
+    if (this.isDestroyed) {
+      return;
+    }
+
+    const hadActiveUpload = this.totalChunksCount > 0 && this.activeRequest;
+
+    this.abortActiveXhr();
+    this.isUploadAborted = true;
+    this.retryUpload();
+
+    if (hadActiveUpload) {
+      this.emitEvent("error", {
+        ...this.getCommonEventData(),
+        message: "Upload aborted. Please try again!",
+      });
+    }
+
+    this.destroy();
+  }
+
+  // Method to pause the upload process
+  pause(): void {
+    if (
+      !this.isDestroyed &&
+      !this.isUploadPaused &&
+      !this.isUploadAborted &&
+      this.totalChunksCount > 0 &&
       this.retryCount < this.maxRetryAttempts
     ) {
       this.isUploadPaused = true;
@@ -330,9 +522,12 @@ export class Uploader {
   }
 
   // Method to resume the upload process
-  async resume() {
+  async resume(): Promise<void> {
     if (this.canResumeUpload()) {
       this.isUploadPaused = false;
+      if (this.isNetworkOffline) {
+        return;
+      }
       await this.synchronizeUploadPosition();
       if (
         this.totalChunksCount !== this.successfulChunksCount &&
@@ -345,16 +540,17 @@ export class Uploader {
   }
 
   // Method to retry the upload process
-  retryUpload() {
+  retryUpload(): void {
     this.abortActiveXhr();
     this.resetUploadState();
   }
 
   // Method to validate user-provided properties
-  validateUserInput() {
+  validateUserInput(): void {
     this.validateUploadEndpoint();
     this.validateSourceFile();
     this.validateRetrySettings();
+    this.validateRecoverySettings();
     this.validateChunkSize();
     this.validateMaxFileSize();
   }
@@ -390,6 +586,20 @@ export class Uploader {
     if (Number.isNaN(this.retryDelaySeconds) || this.retryDelaySeconds < 0) {
       throw new TypeError(
         `Invalid delayRetry: ${this.retryDelaySeconds}. It must be a non-negative number of seconds.`
+      );
+    }
+  }
+
+  private validateRecoverySettings() {
+    if (this.stallTimeoutMs < 1000) {
+      throw new TypeError(
+        `Invalid stallTimeout: ${this.stallTimeoutMs / 1000}. It must be at least 1 second.`
+      );
+    }
+
+    if (this.connectionRefreshBaseMs < 5000) {
+      throw new TypeError(
+        `Invalid connectionRefreshInterval: ${this.connectionRefreshBaseMs / 1000}. It must be at least 5 seconds.`
       );
     }
   }
@@ -444,13 +654,16 @@ export class Uploader {
     }
   }
 
-  on(eventName: EventNameType, fn: (event: CustomEvent) => void): void {
+  on<K extends EventNameType>(
+    eventName: K,
+    fn: (event: UploaderEventMap[K]) => void
+  ): void {
     this.eventEmitter.addEventListener(eventName, fn as EventListener);
   }
 
-  private emitEvent(
-    eventName: EventNameType,
-    detail?: Record<string, any>
+  private emitEvent<K extends EventNameType>(
+    eventName: K,
+    detail?: UploaderEventMap[K] extends CustomEvent<infer D> ? D : never
   ): void {
     this.eventEmitter.dispatchEvent(new CustomEvent(eventName, { detail }));
   }
@@ -462,7 +675,7 @@ export class Uploader {
       remainingChunks: this.totalChunksCount - this.successfulChunksCount,
       totalProgress: (this.successfulChunksCount / this.totalChunksCount) * 100,
       fileName: this.sourceFile.name ?? "",
-      fileSize: this.sourceFile.size ?? "",
+      fileSize: this.sourceFile.size ?? 0,
     };
   }
 
@@ -481,12 +694,12 @@ export class Uploader {
     }
 
     if (!isRetryable && res.statusCode > 0) {
-      this.emitEvent("error", {
+      this.emitTerminalError({
         ...this.getCommonEventData(),
         message: `Upload failed with server response code ${res.statusCode}. Please check your connection and try again.`,
         chunkNumber: this.currentChunkIndex + 1,
         response: res,
-      } as ErrorEventData);
+      });
       return false;
     }
 
@@ -495,18 +708,19 @@ export class Uploader {
       return true;
     }
 
-    this.emitEvent("error", {
+    this.emitTerminalError({
       ...this.getCommonEventData(),
       message: `Upload stopped after ${this.retryCount} failed attempts. The server responded with error code ${res.statusCode}. Please try again later.`,
       chunkNumber: this.currentChunkIndex + 1,
       response: res,
-    } as ErrorEventData);
+    });
 
     return false;
   };
 
   private canProceedWithUpload(): boolean {
     return (
+      !this.isDestroyed &&
       !this.isNetworkOffline &&
       !this.isUploadPaused &&
       !this.isUploadAborted &&
@@ -517,7 +731,6 @@ export class Uploader {
   private canResumeUpload(): boolean {
     return (
       this.isUploadPaused &&
-      !this.isNetworkOffline &&
       !this.isUploadAborted &&
       this.retryCount < this.maxRetryAttempts &&
       this.totalChunksCount > 0
@@ -586,6 +799,11 @@ export class Uploader {
     this.currentChunkIndex++;
     this.successfulChunksCount += 1;
     this.consecutiveBackoffFailures = 0;
+    this.retryCount = 0;
+    this.connectionRefreshMs = Math.max(
+      this.connectionRefreshBaseMs,
+      this.connectionRefreshMs / 2
+    );
     const prevChunkUploadedTime = new Date();
     const prevChunkUploadedInterval =
       (prevChunkUploadedTime.getTime() - this.lastChunkTimestamp) / 1000;
@@ -618,13 +836,18 @@ export class Uploader {
   private updateUploadPosition(nextBytePosition: number): void {
     const boundedPosition = Math.min(nextBytePosition, this.sourceFile.size);
     this.currentChunkStartPosition = boundedPosition;
-    this.currentChunkIndex = Math.floor(
-      boundedPosition / this.configuredChunkBytes
-    );
-    this.successfulChunksCount = Math.min(
-      this.currentChunkIndex,
-      this.totalChunksCount
-    );
+    if (boundedPosition >= this.sourceFile.size) {
+      this.currentChunkIndex = this.totalChunksCount;
+      this.successfulChunksCount = this.totalChunksCount;
+    } else {
+      this.currentChunkIndex = Math.floor(
+        boundedPosition / this.configuredChunkBytes
+      );
+      this.successfulChunksCount = Math.min(
+        this.currentChunkIndex,
+        this.totalChunksCount
+      );
+    }
     this.currentChunkBytes = 0;
   }
 
@@ -635,6 +858,11 @@ export class Uploader {
       const uploadUrl = this.sessionUri ?? this.uploadEndpoint;
 
       xhr.open("PUT", uploadUrl, true);
+      xhr.timeout = this.stallTimeoutMs;
+      xhr.ontimeout = () => {
+        this.activeRequest = undefined;
+        resolve(undefined);
+      };
       xhr.onreadystatechange = () => {
         if (xhr.readyState === 4) {
           this.activeRequest = undefined;
@@ -710,6 +938,7 @@ export class Uploader {
 
       xhr.upload.onprogress = (event: ProgressEvent) => {
         this.isUploadProgress = true;
+        this.lastUploadProgressAt = Date.now();
         const progress = this.calculateProgress(event);
         this.emitEvent("progress", {
           ...this.getCommonEventData(),
@@ -720,6 +949,9 @@ export class Uploader {
       xhr.onreadystatechange = () => {
         if (xhr.readyState === 4) {
           this.isUploadProgress = false;
+          if (this.activeRequest === xhr) {
+            this.stopStallWatchdog();
+          }
           const headerMap = this.parseResponseHeaders(
             xhr.getAllResponseHeaders()
           );
@@ -764,11 +996,12 @@ export class Uploader {
         "Content-Range",
         `bytes ${chunkRangeStart}-${chunkRangeEnd}/${this.sourceFile.size}`
       );
+      this.startStallWatchdog(xhr);
       xhr.send(options.body);
     });
   }
 
-  async handleRetryChunkUploading(res: UploadResponse) {
+  async handleRetryChunkUploading(res: UploadResponse): Promise<void> {
     if (this.canRetryUpload() && !this.isNetworkOffline && navigator.onLine) {
       const requiresBackoff =
         res && [408, 429, 500, 502, 503, 504].includes(res.statusCode);
@@ -779,12 +1012,12 @@ export class Uploader {
         if (
           this.consecutiveBackoffFailures >= this.maxConsecutiveBackoffFailures
         ) {
-          this.emitEvent("error", {
+          this.emitTerminalError({
             ...this.getCommonEventData(),
             message: `Upload stopped after ${this.consecutiveBackoffFailures} consecutive failures. Please try again later.`,
             chunkNumber: this.currentChunkIndex + 1,
             response: res,
-          } as ErrorEventData);
+          });
           return;
         }
       } else {
@@ -802,7 +1035,7 @@ export class Uploader {
         delay = this.retryDelaySeconds * 1000;
       }
 
-      this.retryTimeoutId = setTimeout(() => {
+      this.retryTimeoutId = setTimeout(async () => {
         if (this.canRetryUpload() && !this.isNetworkOffline) {
           if (!requiresBackoff || res.statusCode === 308) {
             this.retryCount++;
@@ -815,6 +1048,20 @@ export class Uploader {
             chunkNumber: this.currentChunkIndex + 1,
           } as ChunkAttemptFailureEventData);
 
+          // A connection-level failure (abort/stall/network: status <= 0) may
+          // still have committed part of the chunk server-side; resync so the
+          // retry continues from the last committed byte instead of
+          // re-sending the whole chunk.
+          if (res.statusCode <= 0) {
+            await this.synchronizeUploadPosition();
+            if (
+              this.totalChunksCount > 0 &&
+              this.totalChunksCount === this.successfulChunksCount
+            ) {
+              return;
+            }
+          }
+
           this.requestChunk();
         }
       }, delay);
@@ -822,7 +1069,15 @@ export class Uploader {
   }
 
   // Method to validate the upload status and proceed accordingly
-  async validateUploadStatus() {
+  async validateUploadStatus(): Promise<void> {
+    if (this.isDestroyed || this.isUploadAborted) {
+      return;
+    }
+
+    if (this.totalChunksCount <= 0) {
+      return;
+    }
+
     if (this.totalChunksCount === this.successfulChunksCount) {
       const totalDuration = (Date.now() - this.uploadStartTimestamp) / 1000; // Convert to seconds
       this.emitEvent("success", {
@@ -836,7 +1091,7 @@ export class Uploader {
   }
 
   // Method to initiate chunk uploads
-  async requestChunk() {
+  async requestChunk(): Promise<void> {
     if (this.canProceedWithUpload() && navigator.onLine) {
       try {
         let currentChunk: Blob | undefined;
@@ -874,10 +1129,10 @@ export class Uploader {
       } catch (error) {
         const err = error as Error;
         console.error(err);
-        this.emitEvent("error", {
+        this.emitTerminalError({
           message:
             "An error occurred while preparing the chunk for upload. Please try again.",
-        } as ErrorEventData);
+        });
       }
     }
   }

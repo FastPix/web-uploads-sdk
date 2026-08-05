@@ -12,7 +12,7 @@ Upload large files from the browser without the fragility. This SDK splits a fil
 
 **Works with:** Browsers · JavaScript · TypeScript · any framework · npm or CDN
 
-📖 **Docs:** https://fastpix.com/docs/upload-videos/upload-videos-from-device#resumable-uploading-of-large-files &nbsp;·&nbsp; 🚀 **Free account:** https://dashboard.fastpix.com
+📖 **Docs:** https://fastpix.com/docs/upload-videos/set-up-resumable-uploads-for-web &nbsp;·&nbsp; 🚀 **Free account:** https://dashboard.fastpix.com
 
 <br />
 

@@ -14,6 +14,8 @@ Upload large files from the browser without the fragility. This SDK splits a fil
 
 📖 **Docs:** https://fastpix.com/docs/upload-videos/upload-videos-from-device#resumable-uploading-of-large-files &nbsp;·&nbsp; 🚀 **Free account:** https://dashboard.fastpix.com
 
+<br />
+
 ## Why this SDK?
 
 - **Chunked large-file uploads** - files are split into configurable chunks (default 16 MB) so big uploads are reliable.
@@ -22,6 +24,8 @@ Upload large files from the browser without the fragility. This SDK splits a fil
 - **Lifecycle events** - subscribe to progress, success, error and chunk events for real-time feedback.
 - **Robust error handling** - upload failures are surfaced gracefully so you can inform users.
 - **Customizable** - tune chunk size, retries and stall/connection behavior to your network conditions.
+
+<br />
 
 ## Features:
 
@@ -32,13 +36,17 @@ Upload large files from the browser without the fragility. This SDK splits a fil
 - **Error Handling and Reporting:** Comprehensive error handling to manage upload failures gracefully and inform users of issues.
 - **Customizability:** Developers can customize the chunk size and retry attempts based on their specific needs and network conditions.
 
-## Before you start
+<br />
+
+## Before you begin
 
 To get started with the SDK, you will need a signed URL.
 
 To make API requests, you'll need a valid **Access Token** and **Secret Key**. See the [Basic Authentication Guide](https://fastpix.com/docs/getting-started/activate-your-account) for details on retrieving these credentials.
 
 Once you have your credentials, use the [Upload media from device](https://fastpix.com/docs/video-on-demand-api/upload-and-import-videos/direct-upload-video-media) API to generate a signed URL for uploading media.
+
+<br />
 
 ## Install the large-file upload SDK
 
@@ -55,6 +63,8 @@ npm i @fastpix/resumable-uploads
 ```bash
 <script src="https://cdn.jsdelivr.net/npm/@fastpix/resumable-uploads@latest/dist/uploads.js"></script>
 ```
+
+<br />
 
 ## How to upload a file
 
@@ -80,6 +90,8 @@ try {
   console.error("Failed to initialize uploads:", error?.message);
 }
 ```
+
+<br />
 
 ## Monitor upload progress through lifecycle events
 
@@ -125,6 +137,8 @@ fileUploader.on("offline", (event) => {
 });
 ```
 
+<br />
+
 ## Pause, resume and abort an upload
 
 You can control the upload lifecycle with the following methods:
@@ -147,6 +161,8 @@ You can control the upload lifecycle with the following methods:
   fileUploader.abort(); // Abort the current upload
   ```
 
+<br />
+
 ## Configuration parameters
 
 The upload function accepts the following parameters:
@@ -161,6 +177,8 @@ The upload function accepts the following parameters:
 | `delayRetry`        | `number` (in seconds)               | Optional | Delay between retry attempts after a failed chunk upload. Default is `1` second.                                                                              |
 | `stallTimeout`      | `number` (in seconds)               | Optional | Time without any upload progress before the in-flight chunk request is treated as stalled, aborted and retried on a fresh connection. Default is `30` seconds, minimum `1`. |
 | `connectionRefreshInterval` | `number` (in seconds)       | Optional | Time a chunk request may keep running before the connection is re-established, continuing from the last byte the server committed. This recovers connections stuck at a stale speed (e.g. a transfer that started on a slow network staying slow after conditions improve). Backs off automatically on genuinely slow networks. Default is `45` seconds, minimum `5`. |
+
+<br />
 
 ### Example usage of integrating all parameters with `Uploader.init`
 
@@ -183,6 +201,8 @@ try {
 }
 ```
 
+<br />
+
 ## Which FastPix upload SDK for your platform
 
 Uploading from a different platform or framework? FastPix has a resumable upload SDK for each.
@@ -197,45 +217,72 @@ Uploading from a different platform or framework? FastPix has a resumable upload
 | Flutter | [flutter-uploads](https://github.com/FastPix/flutter-uploads) |
 | React Native | [react-native-uploader](https://github.com/FastPix/react-native-uploader) |
 
+<br />
+
 ## FAQ
 
 **How do I upload large files from the browser?**
+
 Generate a FastPix signed URL, then call `Uploader.init({ endpoint, file })` with the file from an `<input type="file" />`. The SDK chunks the file and uploads it, as shown in "How to upload a file."
 
 **How do I pause and resume an upload?**
+
 Use `fileUploader.pause()` and `fileUploader.resume()` on the instance returned by `Uploader.init`. See "Pause, resume and abort an upload."
 
 **What happens if a chunk fails or the network drops?**
+
 Each chunk retries automatically (up to `retryChunkAttempt`, default 5) with exponential backoff, and the SDK emits `online`/`offline` events so you can react to connectivity changes.
 
 **Can I set the chunk size and maximum file size?**
+
 Yes - `chunkSize` (min 5 MB, max 500 MB; default 16 MB) and `maxFileSize`. See "Configuration parameters."
 
 **How do I track upload progress?**
+
 Listen to the `progress` lifecycle event, plus `success`, `error` and the per-chunk events. See "Monitor upload progress through lifecycle events."
 
 **Does it support TypeScript?**
+
 The SDK is written in TypeScript.
 
 **Can I use it without npm?**
+
 Yes - load it from a CDN with the `<script>` tag shown under "Install the large-file upload SDK."
 
 **Do I need a FastPix account?**
+
 Yes. The SDK uploads to a FastPix signed URL, so you need FastPix credentials. It is not a general-purpose uploader.
+
+<br />
 
 ## Troubleshooting
 
-- **`Uploader.init` throws?** Check that `endpoint` is a valid signed URL and that a `file` was provided.
-- **Chunk size rejected?** `chunkSize` must be at least 5120 KB (5 MB) and at most 512000 KB (500 MB).
-- **Uploads stall on slow or flaky networks?** Tune `stallTimeout` and `connectionRefreshInterval` (see "Configuration parameters").
-- **Need to surface failures to users?** Listen to the `error` event.
+- **`Uploader.init` throws?**
 
-# References
- 
-[FastPix Homepage](https://www.fastpix.com/)
-[FastPix Dashboard](https://dashboard.fastpix.com/)
-[Uploads github](https://github.com/FastPix/web-uploads-sdk)
+  Check that `endpoint` is a valid signed URL and that a `file` was provided.
 
-# Detailed Usage:
+- **Chunk size rejected?**
 
-For more detailed steps and advanced usage, please refer to the official [FastPix Documentation](https://fastpix.com/docs/upload-videos/upload-videos-from-device#resumable-uploading-of-large-files).
+`chunkSize` must be at least 5120 KB (5 MB) and at most 512000 KB (500 MB).
+
+- **Uploads stall on slow or flaky networks?**
+
+  Tune `stallTimeout` and `connectionRefreshInterval` (see "Configuration parameters").
+
+- **Need to surface failures to users?**
+
+  Listen to the `error` event.
+
+<br />
+
+## Documentation
+
+For more detailed steps and advanced usage, see the official [FastPix documentation](https://fastpix.com/docs/upload-videos/set-up-resumable-uploads-for-web).
+
+## Support
+
+Questions or issues? Open a [GitHub issue](https://github.com/FastPix/web-uploads-sdk/issues) or check the [documentation](https://fastpix.com/docs/upload-videos/set-up-resumable-uploads-for-web).
+
+## License
+
+[MIT](https://github.com/FastPix/web-uploads-sdk/blob/main/LICENSE)

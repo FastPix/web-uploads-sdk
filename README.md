@@ -12,7 +12,9 @@ Upload large files from the browser without the fragility. This SDK splits a fil
 
 **Works with:** Browsers · JavaScript · TypeScript · any framework · npm or CDN
 
-📖 **Docs:** https://fastpix.com/docs/upload-videos/set-up-resumable-uploads-for-web &nbsp;·&nbsp; 🚀 **Free account:** https://dashboard.fastpix.com
+📖 **Docs:** https://fastpix.com/docs/upload-videos/set-up-resumable-uploads-for-web &nbsp;·&nbsp; 
+
+🚀 **Free account:** https://dashboard.fastpix.com
 
 <br />
 
@@ -27,6 +29,7 @@ Upload large files from the browser without the fragility. This SDK splits a fil
 
 <br />
 
+
 ## Features:
 
 - **Chunking:** Files are automatically split into chunks (configurable, default size is 16MB/chunk).
@@ -38,15 +41,54 @@ Upload large files from the browser without the fragility. This SDK splits a fil
 
 <br />
 
+
 ## Before you begin
 
-To get started with the SDK, you will need a signed URL.
+To use the SDK, you need a FastPix account and a signed upload URL.
 
-To make API requests, you'll need a valid **Access Token** and **Secret Key**. See the [Basic Authentication Guide](https://fastpix.com/docs/getting-started/activate-your-account) for details on retrieving these credentials.
+You need the following:
 
-Once you have your credentials, use the [Upload media from device](https://fastpix.com/docs/video-on-demand-api/upload-and-import-videos/direct-upload-video-media) API to generate a signed URL for uploading media.
+- A FastPix **Access Key** and **Secret Key** to authenticate API requests.
+- A media file to upload.
+- A FastPix signed upload URL generated using the [Upload media from device](https://fastpix.com/docs/video-on-demand-api/upload-and-import-videos/direct-upload-video-media) API.
+
+See the [Activate your account](https://fastpix.com/docs/getting-started/activate-your-account) guide for information about retrieving your FastPix API credentials.
+
+> **Security:** Do not expose your Access Key or Secret Key in browser-side code. Generate the signed upload URL from a secure server-side environment and pass only the signed URL to the browser.
 
 <br />
+
+## Generate a signed upload URL
+
+Use the FastPix Upload API to generate a signed URL before initializing the uploader.
+
+For example:
+
+```bash
+curl -X POST "https://api.fastpix.com/v1/on-demand/upload" \
+  -H "Content-Type: application/json" \
+  -u "<ACCESS_KEY>:<SECRET_KEY>" \
+  -d '{
+    "corsOrigin": "http://localhost:5173",
+    "pushMediaSettings": {
+      "accessPolicy": "public",
+      "metadata": {
+        "key1": "value1"
+      },
+      "maxResolution": "1080p",
+      "mediaQuality": "standard"
+    }
+  }'
+  ```
+
+ The `corsOrigin` value must match the origin where your browser application is running. For example, if you are testing locally with an application running at `http://localhost:5173`, set `corsOrigin` to `http://localhost:5173`.
+
+For production applications, replace the local development origin with the origin of your production application.
+
+
+<br />
+
+
 
 ## Install the large-file upload SDK
 
@@ -63,6 +105,8 @@ npm i @fastpix/resumable-uploads
 ```bash
 <script src="https://cdn.jsdelivr.net/npm/@fastpix/resumable-uploads@latest/dist/uploads.js"></script>
 ```
+
+<br />
 
 <br />
 
@@ -90,6 +134,49 @@ try {
   console.error("Failed to initialize uploads:", error?.message);
 }
 ```
+
+### Select a file from the browser
+
+The `file` parameter accepts a browser `File` object. You can get the file from an HTML `<input type="file">` element and pass the selected file to `Uploader.init()`.
+
+For example:
+
+```html
+<input type="file" id="fileInput" />
+```
+The `endpoint` parameter must contain the signed upload URL generated using the FastPix Upload API.
+
+<br />
+
+## How the upload works
+
+The upload process consists of two steps:
+
+1. Generate a signed upload URL using the FastPix Upload API.
+2. Pass the signed upload URL and the selected file to `Uploader.init()`.
+
+The SDK then splits the file into chunks and uploads the chunks to the signed URL.
+
+```text
+Your server
+    |
+    | Generate signed upload URL
+    v
+FastPix Upload API
+    |
+    | Signed upload URL
+    v
+Browser
+    |
+    | Uploader.init({ endpoint, file })
+    v
+FastPix
+    |
+    | Chunked upload
+    v
+Uploaded media
+```
+Your browser application only needs the signed upload URL. Your FastPix credentials should remain on the server.
 
 <br />
 
@@ -139,6 +226,22 @@ fileUploader.on("offline", (event) => {
 
 <br />
 
+### Verify the integration
+
+To verify that the integration is working:
+
+1. Start your browser application.
+2. Select a media file using the file input.
+3. Generate a signed upload URL using the FastPix Upload API.
+4. Pass the signed upload URL and selected file to `Uploader.init()`.
+5. Start the upload and monitor the `progress` event.
+6. Confirm that the `success` event is triggered when the upload completes.
+7. Verify that the uploaded media is available in your FastPix account.
+
+If the upload does not complete, check the `error` event and see the [Troubleshooting](#troubleshooting) section.
+
+<br />
+
 ## Pause, resume and abort an upload
 
 You can control the upload lifecycle with the following methods:
@@ -161,7 +264,7 @@ You can control the upload lifecycle with the following methods:
   fileUploader.abort(); // Abort the current upload
   ```
 
-<br />
+  <br />
 
 ## Configuration parameters
 
@@ -177,6 +280,8 @@ The upload function accepts the following parameters:
 | `delayRetry`        | `number` (in seconds)               | Optional | Delay between retry attempts after a failed chunk upload. Default is `1` second.                                                                              |
 | `stallTimeout`      | `number` (in seconds)               | Optional | Time without any upload progress before the in-flight chunk request is treated as stalled, aborted and retried on a fresh connection. Default is `30` seconds, minimum `1`. |
 | `connectionRefreshInterval` | `number` (in seconds)       | Optional | Time a chunk request may keep running before the connection is re-established, continuing from the last byte the server committed. This recovers connections stuck at a stale speed (e.g. a transfer that started on a slow network staying slow after conditions improve). Backs off automatically on genuinely slow networks. Default is `45` seconds, minimum `5`. |
+
+<br />
 
 <br />
 
@@ -203,6 +308,8 @@ try {
 
 <br />
 
+<br />
+
 ## Which FastPix upload SDK for your platform
 
 Uploading from a different platform or framework? FastPix has a resumable upload SDK for each.
@@ -219,70 +326,86 @@ Uploading from a different platform or framework? FastPix has a resumable upload
 
 <br />
 
+<br />
+
 ## FAQ
 
 **How do I upload large files from the browser?**
 
+
 Generate a FastPix signed URL, then call `Uploader.init({ endpoint, file })` with the file from an `<input type="file" />`. The SDK chunks the file and uploads it, as shown in "How to upload a file."
 
+**Where should I generate the signed upload URL?**
+
+Generate the signed upload URL from your server using the FastPix Upload API. Do not expose your FastPix Access Key or Secret Key in browser-side code. Pass only the signed upload URL to the browser.
+
 **How do I pause and resume an upload?**
+
 
 Use `fileUploader.pause()` and `fileUploader.resume()` on the instance returned by `Uploader.init`. See "Pause, resume and abort an upload."
 
 **What happens if a chunk fails or the network drops?**
 
+
 Each chunk retries automatically (up to `retryChunkAttempt`, default 5) with exponential backoff, and the SDK emits `online`/`offline` events so you can react to connectivity changes.
 
 **Can I set the chunk size and maximum file size?**
+
 
 Yes - `chunkSize` (min 5 MB, max 500 MB; default 16 MB) and `maxFileSize`. See "Configuration parameters."
 
 **How do I track upload progress?**
 
+
 Listen to the `progress` lifecycle event, plus `success`, `error` and the per-chunk events. See "Monitor upload progress through lifecycle events."
 
 **Does it support TypeScript?**
+
 
 The SDK is written in TypeScript.
 
 **Can I use it without npm?**
 
+
 Yes - load it from a CDN with the `<script>` tag shown under "Install the large-file upload SDK."
 
 **Do I need a FastPix account?**
+
 
 Yes. The SDK uploads to a FastPix signed URL, so you need FastPix credentials. It is not a general-purpose uploader.
 
 <br />
 
+<br />
+
 ## Troubleshooting
 
-- **`Uploader.init` throws?**
-
+- **`Uploader.init` throws?** 
+  
   Check that `endpoint` is a valid signed URL and that a `file` was provided.
 
-- **Chunk size rejected?**
+- **CORS error when uploading?** 
 
-`chunkSize` must be at least 5120 KB (5 MB) and at most 512000 KB (500 MB).
+  Check that `corsOrigin` matches the origin of the browser application. For local development, make sure it matches the origin and port used by your local application.
 
-- **Uploads stall on slow or flaky networks?**
+- **Chunk size rejected?** 
+  
+  `chunkSize` must be at least 5120 KB (5 MB) and at most 512000 KB (500 MB).
 
+- **Uploads stall on slow or flaky networks?** 
+  
   Tune `stallTimeout` and `connectionRefreshInterval` (see "Configuration parameters").
 
-- **Need to surface failures to users?**
+- **Need to surface failures to users?** 
 
   Listen to the `error` event.
 
-<br />
+## References
+ 
+[FastPix Homepage](https://www.fastpix.com/)
+[FastPix Dashboard](https://dashboard.fastpix.com/)
+[Uploads github](https://github.com/FastPix/web-uploads-sdk)
 
-## Documentation
+## Detailed Usage:
 
-For more detailed steps and advanced usage, see the official [FastPix documentation](https://fastpix.com/docs/upload-videos/set-up-resumable-uploads-for-web).
-
-## Support
-
-Questions or issues? Open a [GitHub issue](https://github.com/FastPix/web-uploads-sdk/issues) or check the [documentation](https://fastpix.com/docs/upload-videos/set-up-resumable-uploads-for-web).
-
-## License
-
-[MIT](https://github.com/FastPix/web-uploads-sdk/blob/main/LICENSE)
+For more detailed steps and advanced usage, please refer to the official [FastPix Documentation](https://fastpix.com/docs/upload-videos/set-up-resumable-uploads-for-web).

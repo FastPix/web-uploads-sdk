@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/github/license/FastPix/web-uploads-sdk)](./LICENSE)
 [![Built with TypeScript](https://img.shields.io/badge/Built%20with-TypeScript-blue?logo=typescript)](https://www.typescriptlang.org/)
 
-Upload large files from the browser without the fragility. This SDK splits a file into chunks and adds pause/resume, automatic retries with exponential backoff, and real-time progress events, so large uploads survive flaky networks. Written in TypeScript, works with plain JavaScript or any framework, via npm or a CDN.
+Upload large files from the browser without the fragility. This SDK splits a file into chunks and adds pause/resume, automatic retries with exponential backoff, and real-time progress events, so large uploads survive flaky networks. It's a headless upload engine, not a UI kit: you get the methods (pause(), resume(), abort()) and lifecycle events to wire into your own upload button, progress bar, and controls - you build the interface, and the SDK handles the chunking, retries, and network recovery. Written in TypeScript, works with plain JavaScript or any framework, via npm or a CDN.
 
 > This SDK is designed to work with FastPix - it uploads to a FastPix signed URL - and is not a general-purpose uploads SDK.
 
@@ -60,30 +60,42 @@ See the [Activate your account](https://fastpix.com/docs/getting-started/activat
 
 ## Generate a signed upload URL
 
-Use the FastPix Upload API to generate a signed URL before initializing the uploader.
+`Uploader.init()` needs a **signed upload URL** as its `endpoint`. Generate it on your **server** with the FastPix [Upload media from device](https://fastpix.com/docs/video-on-demand-api/input-video/direct-upload-video-media) API, then pass only the returned URL to the browser.
 
-For example:
+Authenticate with Basic Auth - your **Access Token ID** as the username and **Secret Key** as the password:
 
 ```bash
-curl -X POST "https://api.fastpix.com/v1/on-demand/upload" \
+curl -X POST https://api.fastpix.com/v1/on-demand/upload \
   -H "Content-Type: application/json" \
-  -u "<ACCESS_KEY>:<SECRET_KEY>" \
+  -u "<ACCESS_TOKEN_ID>:<SECRET_KEY>" \
   -d '{
-    "corsOrigin": "http://localhost:5173",
+    "corsOrigin": "*",
     "pushMediaSettings": {
       "accessPolicy": "public",
-      "metadata": {
-        "key1": "value1"
-      },
+      "metadata": { "key1": "value1" },
       "maxResolution": "1080p",
       "mediaQuality": "standard"
     }
   }'
-  ```
+```
 
- The `corsOrigin` value must match the origin where your browser application is running. For example, if you are testing locally with an application running at `http://localhost:5173`, set `corsOrigin` to `http://localhost:5173`.
+The response returns the signed URL as `data.url` - that is the value you pass to `Uploader.init({ endpoint })`:
 
-For production applications, replace the local development origin with the origin of your production application.
+```json
+{
+  "success": true,
+  "data": {
+    "uploadId": "...",
+    "url": "https://storage.googleapis.com/..."
+  }
+}
+```
+
+Set **`corsOrigin`** to the origin of your browser app (for example `http://localhost:5173` in local development, or your production origin), or `"*"` to allow any origin. If it does not match, browser uploads fail with a CORS error.
+
+For the full request schema and all `pushMediaSettings` options, see the [Upload media from device](https://fastpix.com/docs/video-on-demand-api/input-video/direct-upload-video-media) API reference.
+
+> **Security:** Generate the signed URL from a secure server-side environment. Never expose your Access Token ID or Secret Key in browser-side code - pass only the signed URL to the browser.
 
 
 <br />
@@ -337,7 +349,7 @@ Generate a FastPix signed URL, then call `Uploader.init({ endpoint, file })` wit
 
 **Where should I generate the signed upload URL?**
 
-Generate the signed upload URL from your server using the FastPix Upload API. Do not expose your FastPix Access Key or Secret Key in browser-side code. Pass only the signed upload URL to the browser.
+Generate the signed upload URL from your server using the [FastPix Upload API](https://fastpix.com/docs/video-on-demand-api/input-video/direct-upload-video-media). Do not expose your FastPix Access Key or Secret Key in browser-side code. Pass only the signed upload URL to the browser. Refer to [Generate JWTs for secure media](https://fastpix.com/docs/video-security/generate-jwts-for-secure-media) guide.
 
 **How do I pause and resume an upload?**
 
